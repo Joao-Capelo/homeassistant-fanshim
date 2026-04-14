@@ -1,0 +1,19 @@
+{
+  "name": "FanShim Controller",
+  "version": "1.0",
+  "slug": "fanshim",
+  "description": "Control FanShim based on CPU temperature",
+  "startup": "services",
+  "boot": "auto",
+  "host_network": true,
+  "privileged": ["SYS_RAWIO"],
+  "devices": ["/dev/gpiomem"],
+  "options": {
+    "on_temperature": 60,
+    "off_temperature": 50
+  },
+  "schema": {
+    "on_temperature": "int",
+    "off_temperature": "int"
+  }
+}
