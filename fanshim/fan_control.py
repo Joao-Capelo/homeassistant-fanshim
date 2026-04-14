@@ -3,8 +3,17 @@ import argparse
 import time
 import os
 import sys
+import signal
 
 TEMP_PATH = "/sys/class/thermal/thermal_zone0/temp"
+
+
+# Try to use RPi.GPIO (works with /dev/gpiomem), fallback to sysfs
+try:
+    import RPi.GPIO as GPIO  # type: ignore
+    HAS_RPI = True
+except Exception:
+    HAS_RPI = False
 
 
 def parse_args():
@@ -25,31 +34,69 @@ def get_temp():
         return None
 
 
-def ensure_gpio(gpio):
+# Sysfs helpers (fallback)
+def sysfs_available(gpio):
     base = f"/sys/class/gpio/gpio{gpio}"
+    export = "/sys/class/gpio/export"
+    direction = os.path.join(base, "direction")
+    value = os.path.join(base, "value")
+    # we can use sysfs only if export is writable or gpio already exported and value writable
+    if os.path.exists(value) and os.access(value, os.W_OK):
+        return True
+    try:
+        return os.access(export, os.W_OK)
+    except Exception:
+        return False
+
+
+def ensure_sysfs(gpio):
+    base = f"/sys/class/gpio/gpio{gpio}"
+    export = "/sys/class/gpio/export"
+    direction = os.path.join(base, "direction")
     try:
         if not os.path.exists(base):
-            with open("/sys/class/gpio/export", "w") as f:
+            with open(export, "w") as f:
                 f.write(str(gpio))
-            # small delay so sysfs appears
             time.sleep(0.1)
-        direction_path = os.path.join(base, "direction")
-        if os.path.exists(direction_path):
-            with open(direction_path, "w") as f:
+        if os.path.exists(direction):
+            with open(direction, "w") as f:
                 f.write("out")
-    except PermissionError:
-        print("Permission error while configuring GPIO. Make sure the add-on has access to GPIO.", file=sys.stderr)
+        return True
     except Exception as e:
-        print("GPIO setup error:", e, file=sys.stderr)
+        print("GPIO setup error (sysfs):", e, file=sys.stderr)
+        return False
 
 
-def write_gpio_value(gpio, state):
+def write_sysfs(gpio, state):
     value_path = f"/sys/class/gpio/gpio{gpio}/value"
     try:
         with open(value_path, "w") as f:
             f.write("1" if state else "0")
+        return True
     except Exception as e:
-        print("GPIO write error:", e, file=sys.stderr)
+        print("GPIO write error (sysfs):", e, file=sys.stderr)
+        return False
+
+
+# RPi.GPIO helpers
+def setup_rpi_gpio(gpio):
+    try:
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(gpio, GPIO.OUT)
+        return True
+    except Exception as e:
+        print("GPIO setup error (RPi.GPIO):", e, file=sys.stderr)
+        return False
+
+
+def write_rpi_gpio(gpio, state):
+    try:
+        GPIO.output(gpio, GPIO.HIGH if state else GPIO.LOW)
+        return True
+    except Exception as e:
+        print("GPIO write error (RPi.GPIO):", e, file=sys.stderr)
+        return False
 
 
 def main():
@@ -61,13 +108,48 @@ def main():
 
     print(f"FanShim started | ON={args.on_temp} OFF={args.off_temp} INTERVAL={args.interval} GPIO={args.gpio}")
 
-    ensure_gpio(args.gpio)
+    use_rpi = False
+    use_sysfs = False
+
+    if HAS_RPI:
+        use_rpi = setup_rpi_gpio(args.gpio)
+        if not use_rpi:
+            print("RPi.GPIO import succeeded but setup failed. Will try sysfs fallback.", file=sys.stderr)
+
+    if not use_rpi and sysfs_available(args.gpio):
+        use_sysfs = ensure_sysfs(args.gpio)
+        if not use_sysfs:
+            print("Sysfs gpio setup failed.", file=sys.stderr)
+
+    if not use_rpi and not use_sysfs:
+        print("No usable GPIO backend available. Ensure the add-on has access to /dev/gpiomem or sysfs GPIO writable.", file=sys.stderr)
 
     fan_on = False
+
+    def handle_sigterm(signum, frame):
+        # Turn fan off on exit if possible
+        try:
+            if fan_on:
+                if use_rpi:
+                    write_rpi_gpio(args.gpio, False)
+                elif use_sysfs:
+                    write_sysfs(args.gpio, False)
+        except Exception:
+            pass
+        # cleanup RPi.GPIO
+        if HAS_RPI:
+            try:
+                GPIO.cleanup()
+            except Exception:
+                pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGINT, handle_sigterm)
+
     while True:
         temp = get_temp()
         if temp is None:
-            # if we cannot read temperature, wait and retry
             time.sleep(args.interval)
             continue
 
@@ -75,12 +157,27 @@ def main():
 
         if temp >= args.on_temp and not fan_on:
             print("Turning fan ON")
-            write_gpio_value(args.gpio, True)
-            fan_on = True
+            ok = False
+            if use_rpi:
+                ok = write_rpi_gpio(args.gpio, True)
+            elif use_sysfs:
+                ok = write_sysfs(args.gpio, True)
+            if ok:
+                fan_on = True
+            else:
+                print("Failed to turn fan ON", file=sys.stderr)
+
         elif temp <= args.off_temp and fan_on:
             print("Turning fan OFF")
-            write_gpio_value(args.gpio, False)
-            fan_on = False
+            ok = False
+            if use_rpi:
+                ok = write_rpi_gpio(args.gpio, False)
+            elif use_sysfs:
+                ok = write_sysfs(args.gpio, False)
+            if ok:
+                fan_on = False
+            else:
+                print("Failed to turn fan OFF", file=sys.stderr)
 
         time.sleep(args.interval)
 
