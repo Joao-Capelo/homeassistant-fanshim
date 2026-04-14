@@ -1,0 +1,8 @@
+{
+  "name": "Fanshim Add-ons",
+  "url": "https://github.com/Joao-Capelo/homeassistant-fanshim",
+  "maintainer": "Joao-Capelo",
+  "addons": [
+    "fanshim"
+  ]
+}
