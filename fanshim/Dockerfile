@@ -1,4 +1,4 @@
-FROM ghcr.io/hassio-addons/base-python:3.11.0
+FROM ${BUILD_FROM}
 
 WORKDIR /app
 
