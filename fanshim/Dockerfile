@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python bindings that can control GPIO from container
+# Install Python GPIO libraries (build wheels if needed)
 RUN pip install --no-cache-dir RPi.GPIO python-periphery
 
 COPY run.sh /run.sh
