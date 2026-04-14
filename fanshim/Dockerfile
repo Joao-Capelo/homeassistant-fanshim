@@ -1,12 +1,10 @@
-FROM python:3.11-slim
+FROM ghcr.io/hassio-addons/base-python:3.11.0
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    python3-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
+COPY run.sh /run.sh
 COPY fan_control.py /app/fan_control.py
 
-CMD ["python3", "/app/fan_control.py", "60", "50"]
+RUN chmod a+x /run.sh
+
+CMD [ "/run.sh" ]
