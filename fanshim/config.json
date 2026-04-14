@@ -13,9 +13,6 @@
   "devices": [
     "/dev/gpiomem"
   ],
-  "privileged": [
-    "GPIO"
-  ],
   "options": {
     "on_temperature": 60,
     "off_temperature": 50,
