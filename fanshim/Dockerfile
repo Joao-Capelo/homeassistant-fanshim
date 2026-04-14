@@ -4,15 +4,16 @@ FROM ${BUILD_FROM}
 
 WORKDIR /app
 
-# Install build deps and libgpiod dev (optional) so RPi.GPIO can be installed
 RUN apt-get update && apt-get install -y \
     python3-dev \
     gcc \
+    libgpiod2 \
     libgpiod-dev \
+    python3-libgpiod \
     && rm -rf /var/lib/apt/lists/*
 
-# Install RPi.GPIO Python package (uses /dev/gpiomem)
-RUN pip install RPi.GPIO
+# Install Python bindings
+RUN pip install RPi.GPIO gpiod
 
 COPY run.sh /run.sh
 COPY fan_control.py /app/fan_control.py
