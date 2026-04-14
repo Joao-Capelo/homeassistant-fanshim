@@ -2,18 +2,19 @@ name: "FanShim Controller"
 slug: fanshim
 version: "1.0.0"
 description: "Controla ventoinha FanShim com base na temperatura da CPU"
+
 startup: application
 boot: auto
 
 arch:
   - aarch64
   - armv7
-
-privileged:
-  - GPIO
+  - armhf
 
 devices:
   - /dev/gpiomem
+
+privileged: []
 
 options: {}
 schema: {}
