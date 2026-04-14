@@ -7,13 +7,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     python3-dev \
     gcc \
-    libgpiod2 \
-    libgpiod-dev \
-    python3-libgpiod \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python bindings
-RUN pip install RPi.GPIO gpiod
+# Install RPi.GPIO only
+RUN pip install RPi.GPIO
 
 COPY run.sh /run.sh
 COPY fan_control.py /app/fan_control.py
