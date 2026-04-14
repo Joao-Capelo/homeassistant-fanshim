@@ -5,11 +5,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     python3-dev \
     gcc \
-    && apt-get clean
+    && rm -rf /var/lib/apt/lists/*
 
-COPY run.sh /app/run.sh
 COPY fan_control.py /app/fan_control.py
 
-RUN chmod +x /app/run.sh
-
-CMD [ "/app/run.sh" ]
+CMD ["python3", "/app/fan_control.py", "60", "50"]
