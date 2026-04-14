@@ -7,7 +7,13 @@ import signal
 
 TEMP_PATH = "/sys/class/thermal/thermal_zone0/temp"
 
-# Try backends: libgpiod, RPi.GPIO (gpiomem), fallback to sysfs
+# Try backends: periphery, libgpiod, RPi.GPIO, fallback to sysfs
+try:
+    from periphery import GPIO as PeripheryGPIO  # type: ignore
+    HAS_PERIPH = True
+except Exception:
+    HAS_PERIPH = False
+
 try:
     import gpiod  # type: ignore
     HAS_LIBGPIOD = True
@@ -37,6 +43,33 @@ def get_temp():
     except Exception as e:
         print("Error reading temperature:", e, file=sys.stderr)
         return None
+
+
+# periphery helpers
+def setup_periphery(gpio):
+    try:
+        gpio = PeripheryGPIO(gpio, "out")
+        gpio.set_value(0)
+        return gpio
+    except Exception as e:
+        print("GPIO setup error (periphery):", e, file=sys.stderr)
+        return None
+
+
+def write_periphery(gpio, state):
+    try:
+        gpio.set_value(1 if state else 0)
+        return True
+    except Exception as e:
+        print("GPIO write error (periphery):", e, file=sys.stderr)
+        return False
+
+
+def cleanup_periphery(gpio):
+    try:
+        gpio.pin.close()
+    except Exception:
+        pass
 
 
 # libgpiod helpers
@@ -153,14 +186,23 @@ def main():
         f"FanShim started | ON={args.on_temp} OFF={args.off_temp} INTERVAL={args.interval} GPIO={args.gpio}"
     )
 
+    use_periph = False
     use_lib = False
     use_rpi = False
     use_sysfs = False
     lib_chip = None
     lib_line = None
 
-    # Try libgpiod first (preferred on modern kernels)
-    if HAS_LIBGPIOD:
+    # Try periphery first (preferred on Raspberry Pi OS Bullseye and later)
+    if HAS_PERIPH:
+        periph_gpio = setup_periphery(args.gpio)
+        if periph_gpio is not None:
+            use_periph = True
+        else:
+            print("periphery available but setup failed, will try other backends.", file=sys.stderr)
+
+    # Try libgpiod next (preferred on modern kernels)
+    if not use_periph and HAS_LIBGPIOD:
         lib_chip, lib_line = setup_libgpiod(args.gpio)
         if lib_line is not None:
             use_lib = True
@@ -168,18 +210,18 @@ def main():
             print("libgpiod available but setup failed, will try other backends.", file=sys.stderr)
 
     # Try RPi.GPIO next
-    if not use_lib and HAS_RPI:
+    if not use_periph and not use_lib and HAS_RPI:
         use_rpi = setup_rpi_gpio(args.gpio)
         if not use_rpi:
             print("RPi.GPIO import succeeded but setup failed. Will try sysfs fallback.", file=sys.stderr)
 
     # Finally sysfs fallback
-    if not use_lib and not use_rpi and sysfs_available(args.gpio):
+    if not use_periph and not use_lib and not use_rpi and sysfs_available(args.gpio):
         use_sysfs = ensure_sysfs(args.gpio)
         if not use_sysfs:
             print("Sysfs gpio setup failed.", file=sys.stderr)
 
-    if not use_lib and not use_rpi and not use_sysfs:
+    if not use_periph and not use_lib and not use_rpi and not use_sysfs:
         print(
             "No usable GPIO backend available. Ensure the add-on has access to /dev/gpiomem or /dev/gpiochip0, or sysfs GPIO writable.",
             file=sys.stderr,
@@ -197,6 +239,8 @@ def main():
                     write_rpi_gpio(args.gpio, False)
                 elif use_sysfs:
                     write_sysfs(args.gpio, False)
+                elif use_periph:
+                    write_periphery(periph_gpio, False)
         except Exception:
             pass
         # cleanup
@@ -204,12 +248,15 @@ def main():
             cleanup_libgpiod(lib_line, lib_chip)
         if HAS_RPI and use_rpi:
             cleanup_rpi_gpio()
+        if use_periph:
+            cleanup_periphery(periph_gpio)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)
 
     # DEBUG: show available GPIO backends and device state
+    print("Debug: HAS_PERIPH =", HAS_PERIPH)
     print("Debug: HAS_LIBGPIOD =", HAS_LIBGPIOD)
     print("Debug: HAS_RPI =", HAS_RPI)
     try:
@@ -243,6 +290,8 @@ def main():
                 ok = write_rpi_gpio(args.gpio, True)
             elif use_sysfs:
                 ok = write_sysfs(args.gpio, True)
+            elif use_periph:
+                ok = write_periphery(periph_gpio, True)
             if ok:
                 fan_on = True
             else:
@@ -257,6 +306,8 @@ def main():
                 ok = write_rpi_gpio(args.gpio, False)
             elif use_sysfs:
                 ok = write_sysfs(args.gpio, False)
+            elif use_periph:
+                ok = write_periphery(periph_gpio, False)
             if ok:
                 fan_on = False
             else:

@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install RPi.GPIO only
-RUN pip install RPi.GPIO
+# Install Python bindings that can control GPIO from container
+RUN pip install --no-cache-dir RPi.GPIO python-periphery
 
 COPY run.sh /run.sh
 COPY fan_control.py /app/fan_control.py
