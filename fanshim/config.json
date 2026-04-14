@@ -1,6 +1,6 @@
 {
   "name": "FanShim Controller",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "slug": "fanshim",
   "description": "Controla ventoinha FanShim com base na temperatura da CPU",
   "startup": "services",
