@@ -1,6 +1,6 @@
 {
   "name": "FanShim Controller",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "slug": "fanshim",
   "description": "Controla ventoinha FanShim com base na temperatura da CPU",
   "startup": "services",
@@ -11,7 +11,8 @@
     "armhf"
   ],
   "devices": [
-    "/dev/gpiomem"
+    "/dev/gpiomem",
+    "/dev/gpiochip0"
   ],
   "options": {
     "on_temperature": 60,
