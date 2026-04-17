@@ -25,6 +25,6 @@
     "check_interval": "int"
   },
   "privileged": [
-    "GPIO"
+    "SYS_RAWIO"
   ]
 }
