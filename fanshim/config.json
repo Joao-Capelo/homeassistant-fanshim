@@ -24,5 +24,7 @@
     "off_temperature": "int",
     "check_interval": "int"
   },
-  "privileged": true
+  "privileged": [
+    "GPIO"
+  ]
 }
