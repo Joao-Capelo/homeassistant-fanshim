@@ -7,6 +7,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     python3-dev \
     gcc \
+    libgpiod2 \
+    python3-libgpiod \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python GPIO libraries (build wheels if needed)
