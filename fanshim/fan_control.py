@@ -73,18 +73,26 @@ def cleanup_periphery(gpio):
         pass
 
 
-# libgpiod helpers (auto-detect /dev/gpiochip* before using)
+# libgpiod helpers (try each gpiochip device until the requested line is available)
 def setup_libgpiod(gpio):
     try:
-        chips = glob.glob("/dev/gpiochip*")
+        chips = sorted(glob.glob("/dev/gpiochip*"))
         if not chips:
             raise FileNotFoundError("no /dev/gpiochip* devices found")
-        # Use the first available gpiochip device
-        chip_name = os.path.basename(chips[0])
-        chip = gpiod.Chip(chip_name)
-        line = chip.get_line(gpio)
-        line.request(consumer="fanshim", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
-        return chip, line
+        for chip_path in chips:
+            try:
+                chip = gpiod.Chip(chip_path)
+                line = chip.get_line(gpio)
+                line.request(consumer="fanshim", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
+                return chip, line
+            except Exception as e_inner:
+                # If this chip doesn't have the line, close and try next
+                try:
+                    chip.close()
+                except Exception:
+                    pass
+                # Continue to next chip
+        raise FileNotFoundError(f"GPIO line {gpio} not available on any gpiochip")
     except Exception as e:
         print("GPIO setup error (libgpiod):", e, file=sys.stderr)
         return None, None
