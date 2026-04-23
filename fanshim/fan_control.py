@@ -4,6 +4,7 @@ import time
 import os
 import sys
 import signal
+import glob
 
 TEMP_PATH = "/sys/class/thermal/thermal_zone0/temp"
 
@@ -72,10 +73,15 @@ def cleanup_periphery(gpio):
         pass
 
 
-# libgpiod helpers
+# libgpiod helpers (auto-detect /dev/gpiochip* before using)
 def setup_libgpiod(gpio):
     try:
-        chip = gpiod.Chip("gpiochip0")
+        chips = glob.glob("/dev/gpiochip*")
+        if not chips:
+            raise FileNotFoundError("no /dev/gpiochip* devices found")
+        # Use the first available gpiochip device
+        chip_name = os.path.basename(chips[0])
+        chip = gpiod.Chip(chip_name)
         line = chip.get_line(gpio)
         line.request(consumer="fanshim", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
         return chip, line
@@ -261,7 +267,9 @@ def main():
     print("Debug: HAS_RPI =", HAS_RPI)
     try:
         devs = [p for p in ["/dev/gpiomem", "/dev/gpiochip0"] if os.path.exists(p)]
+        chips = glob.glob("/dev/gpiochip*")
         print("Debug: /dev files:", devs)
+        print("Debug: gpiochips found:", chips)
         for p in ["/dev/gpiomem", "/dev/gpiochip0"]:
             if os.path.exists(p):
                 print(f"Debug: {p} perms:", oct(os.stat(p).st_mode & 0o777))
