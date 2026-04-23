@@ -7,18 +7,18 @@ import signal
 
 TEMP_PATH = "/sys/class/thermal/thermal_zone0/temp"
 
-# Try backends: periphery, libgpiod, RPi.GPIO, fallback to sysfs
-try:
-    from periphery import GPIO as PeripheryGPIO  # type: ignore
-    HAS_PERIPH = True
-except Exception:
-    HAS_PERIPH = False
-
+# Try backends: libgpiod, periphery, RPi.GPIO, fallback to sysfs
 try:
     import gpiod  # type: ignore
     HAS_LIBGPIOD = True
 except Exception:
     HAS_LIBGPIOD = False
+
+try:
+    from periphery import GPIO as PeripheryGPIO  # type: ignore
+    HAS_PERIPH = True
+except Exception:
+    HAS_PERIPH = False
 
 try:
     import RPi.GPIO as GPIO  # type: ignore
@@ -193,21 +193,21 @@ def main():
     lib_chip = None
     lib_line = None
 
-    # Try periphery first (preferred on Raspberry Pi OS Bullseye and later)
-    if HAS_PERIPH:
-        periph_gpio = setup_periphery(args.gpio)
-        if periph_gpio is not None:
-            use_periph = True
-        else:
-            print("periphery available but setup failed, will try other backends.", file=sys.stderr)
-
-    # Try libgpiod next (preferred on modern kernels)
-    if not use_periph and HAS_LIBGPIOD:
+    # Try libgpiod first (preferred on modern kernels)
+    if HAS_LIBGPIOD:
         lib_chip, lib_line = setup_libgpiod(args.gpio)
         if lib_line is not None:
             use_lib = True
         else:
             print("libgpiod available but setup failed, will try other backends.", file=sys.stderr)
+
+    # Try periphery next (useful on some Raspberry Pi OS installs)
+    if not use_lib and HAS_PERIPH:
+        periph_gpio = setup_periphery(args.gpio)
+        if periph_gpio is not None:
+            use_periph = True
+        else:
+            print("periphery available but setup failed, will try other backends.", file=sys.stderr)
 
     # Try RPi.GPIO next
     if not use_periph and not use_lib and HAS_RPI:

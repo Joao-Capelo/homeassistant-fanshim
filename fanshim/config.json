@@ -1,6 +1,6 @@
 {
   "name": "FanShim Controller",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "slug": "fanshim",
   "description": "Controla ventoinha FanShim com base na temperatura da CPU",
   "startup": "services",
@@ -25,6 +25,7 @@
     "check_interval": "int"
   },
   "privileged": [
+    "SYS_ADMIN",
     "SYS_RAWIO"
   ]
 }
