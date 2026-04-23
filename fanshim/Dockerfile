@@ -1,4 +1,4 @@
-ARG BUILD_FROM=python:3.11-bookworm-slim
+ARG BUILD_FROM=python:3.11-slim-bullseye
 ARG BUILD_ARCH
 FROM ${BUILD_FROM}
 
